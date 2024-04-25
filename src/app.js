@@ -19,4 +19,10 @@ app.use(express.static("public"));
 // FOR APPLING C.U.R.D OPERATIONS IN BROWSER's COOKIE
 app.use(cookieParser());
 
-export default app;
+// IMPORTING ROUTER
+import userRouter from "./routes/user.routes.js";
+
+// Route DECLARATION
+app.use("/api/v1/users", userRouter);
+
+export {app};
