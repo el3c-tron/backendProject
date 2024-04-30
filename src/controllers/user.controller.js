@@ -205,4 +205,170 @@ const logout = asyncHandler( async(req, res)=>{
             ) );
 } );
 
-export {register, login, logout, refreshAccessToken};
+const changePassword = asyncHandler( async(req, res) => {
+    const userId = req.user._id;
+    const {oldPassword, newPassword} = req.body;
+
+    if(!oldPassword && !newPassword) throw new ApiError(400, "All fields Required !!");
+
+    const user = await User.findById(userId);
+
+    if(!user) throw new ApiError(400, "User Not Found !!");
+    
+    const correctPassword = user.isPasswordCorrect(oldPassword);
+
+    if(!correctPassword) throw new ApiError(400, "Incorrect Old Password !!");
+
+    user.password = newPassword;
+
+    user.save({validateBeforeSave: false});
+
+    return res.status(200).json(new ApiResponse(200, {}, "Password Changed Successfully"));
+    
+} )
+
+const getCurrentUser = asyncHandler( async(req, res) => {
+    return res.status(200).json(new ApiResponse(200, req.user, "Current User Found successfully !!"));
+} )
+
+const updateAvatar = asyncHandler( async(req, res) => {
+    
+    const userId = req.user._id;
+    const avatarLocalPath = req.file?.path;
+
+    if(!avatarLocalPath) throw new ApiError(400, "Avatar not Found !!");
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    if(!avatar.url) throw new ApiError(500, "Error while Uploading on Cloudinary");
+
+    const user = await User.findByIdAndUpdate(
+        userId,
+        {
+            $set: {
+                avatar: avatar.url
+            }
+        },
+        {new: true}
+    ).select("-passowrd -refreshToken");
+
+    return res.status(200).json(new ApiResponse(200, user, "Avatar Updated Successfully"));
+
+} );
+
+const updateCoverImage = asyncHandler( async(req, res) => {
+    
+    const userId = req.user._id;
+    const coverImageLocalPath = req.file?.path;
+
+    if(!coverImageLocalPath) throw new ApiError(400, "coverImage not Found !!");
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+    if(!coverImage.url) throw new ApiError(500, "Error while Uploading on Cloudinary");
+
+    const user = await User.findByIdAndUpdate(
+        userId,
+        {
+            $set: {
+                coverImage: coverImage.url
+            }
+        },
+        {new: true}
+    ).select("-passowrd -refreshToken");
+
+    return res.status(200).json(new ApiResponse(200, user, "coverImage Updated Successfully"));
+
+} );
+
+const getUserChannelProfile = asyncHandler( async(req, res) => {
+
+    const username = req.params;
+
+    if(!username) throw new ApiError(404, "Username not Found");
+
+    const channelProfile = await User.aggregate([
+
+        // Stage 1 : Match the username
+        {
+            $match: {
+                username: "username"
+            }
+        },
+
+        // Stage 2 : LookUp (Left Join) for finding all the subscribers
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+
+        // Stage 3 : LookUp (Left Join) for finding all the channels the this channel subscribed to
+
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+
+        // Stage 4 : Adding some extra fields
+
+        {
+            $addFields: {
+                subscriberCount: {
+                    $size: "$subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+
+        // Stage 5 : Sending only relevant information
+        {
+            $project: {
+                username: 1,
+                email: 1,
+                fullName: 1,
+                coverImage: 1,
+                avatar: 1,
+                subscriberCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1
+            }
+        } 
+
+    ]);
+
+    if(!channelProfile?.length) throw new ApiError(404, "Channel Niot Found");
+
+    return res
+            .status(200)
+            .json(new ApiResponse(200, channelProfile[0], "Channel Found Successfully"));
+
+} );
+
+export {
+    register, 
+    login, 
+    logout, 
+    refreshAccessToken, 
+    getCurrentUser, 
+    changePassword, 
+    updateAvatar, 
+    updateCoverImage,
+    getUserChannelProfile
+};
