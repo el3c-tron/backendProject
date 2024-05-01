@@ -49,11 +49,11 @@ const userSchema = new mongoose.Schema({
 }, {timestamps: true} );
 
 // USING PRE HOOK IN MONGOOSE
-userSchema.pre("save", async function(next) {
-    
-    if(this.isModified("password")) this.password = await bcrypt.hash(this.password, 10);
-    
-    next();
+userSchema.pre("save", async function (next) {
+    if(!this.isModified("password")) return next();
+
+    this.password = await bcrypt.hash(this.password, 10)
+    next()
 });
 
 //  COSTUME METHODS IN MONGOOSE

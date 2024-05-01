@@ -207,7 +207,7 @@ const logout = asyncHandler( async(req, res)=>{
 } );
 
 const changePassword = asyncHandler( async(req, res) => {
-    const userId = req.user._id;
+    const userId = req.user?._id;
     const {oldPassword, newPassword} = req.body;
 
     if(!oldPassword && !newPassword) throw new ApiError(400, "All fields Required !!");
@@ -216,13 +216,13 @@ const changePassword = asyncHandler( async(req, res) => {
 
     if(!user) throw new ApiError(400, "User Not Found !!");
     
-    const correctPassword = user.isPasswordCorrect(oldPassword);
+    const correctPassword = await user.isPasswordCorrect(oldPassword);
 
     if(!correctPassword) throw new ApiError(400, "Incorrect Old Password !!");
 
     user.password = newPassword;
 
-    user.save({validateBeforeSave: false});
+    await user.save({validateBeforeSave: false});
 
     return res.status(200).json(new ApiResponse(200, {}, "Password Changed Successfully"));
     
@@ -284,16 +284,18 @@ const updateCoverImage = asyncHandler( async(req, res) => {
 
 const getUserChannelProfile = asyncHandler( async(req, res) => {
 
-    const username = req.params;
+    const {username} = req.params;
 
-    if(!username) throw new ApiError(404, "Username not Found");
+    if(!username?.trim()) throw new ApiError(404, "Username not Found");
+
+    console.log(username);
 
     const channelProfile = await User.aggregate([
 
         // Stage 1 : Match the username
         {
             $match: {
-                username: "username"
+                username: username.toLowerCase()
             }
         },
 
@@ -353,8 +355,9 @@ const getUserChannelProfile = asyncHandler( async(req, res) => {
         } 
 
     ]);
+    
 
-    if(!channelProfile?.length) throw new ApiError(404, "Channel Niot Found");
+    if(!channelProfile?.length) throw new ApiError(404, "Channel Not Found");
 
     return res
             .status(200)
@@ -366,7 +369,9 @@ const getWatchHistory = asyncHandler( async(req, res) => {
     
     const user = await User.aggregate([
         {
-            $match: new mongoose.Types.ObjectId(req.user._id)
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
         },
         {
             $lookup: {
@@ -377,7 +382,7 @@ const getWatchHistory = asyncHandler( async(req, res) => {
                 pipeline: [
                     {
                         $lookup: {
-                            form: "users",
+                            from: "users",
                             localField: "owner",
                             foreignField: "_id",
                             as: "owner",
@@ -395,7 +400,7 @@ const getWatchHistory = asyncHandler( async(req, res) => {
                     {
                         $addFields: {
                             owner: {
-                                $first: "owner"
+                                $first: "$owner"
                             }
                         }
                     }
